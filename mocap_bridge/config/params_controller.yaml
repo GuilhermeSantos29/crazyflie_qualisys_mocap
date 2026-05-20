@@ -1,0 +1,34 @@
+drone_controller:
+  ros__parameters:
+    # Nome do drone
+    robot_name: "cf231"
+
+    # Modo de controlo: "position" ou "velocity"
+    mode: "position"
+
+    # Trajectória: "pentagon","pwm","square_vertical" ,"square", "circle", "forward", "hover"
+    trajectory: "hover"
+
+    # Altura de voo em metros
+    target_height: 1.77
+
+    # Tamanho do lado (square/forward) ou raio (circle) em metros
+    side_length: 1.0
+
+    # Número de pontos para o círculo (quanto maior, mais suave)
+    circle_points: 16
+
+    # Velocidade de voo em m/s (só para modo velocity)
+    velocity: 0.5
+
+    # Duração do takeoff em segundos
+    takeoff_duration: 4.0
+
+    # Tempo de hover antes de iniciar a trajectória em segundos
+    hover_duration: 4.0
+
+    # Duração de cada waypoint em segundos (só para modo position)
+    waypoint_duration: 3.0
+
+    # Duração da aterragem em segundos
+    land_duration: 2.5

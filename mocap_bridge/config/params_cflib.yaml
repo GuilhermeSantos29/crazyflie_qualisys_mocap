@@ -1,0 +1,22 @@
+cflib_controller:
+  ros__parameters:
+    # Nome do drone
+    robot_name: "cf231"
+
+    # URI do drone via Crazyradio
+    uri: "radio://0/80/2M/E7E7E7E7E7"
+
+    # Altura de hover em metros
+    target_height: 1.0
+
+    # Duração do takeoff em segundos
+    takeoff_duration: 3.0
+
+    # Duração do hover em segundos
+    hover_duration: 5.0
+
+    # Duração da aterragem em segundos
+    land_duration: 3.0
+
+    # Frequência de envio da posição ao drone em Hz
+    extpos_rate: 50.0

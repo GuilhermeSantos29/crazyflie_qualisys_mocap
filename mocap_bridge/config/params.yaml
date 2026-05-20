@@ -1,0 +1,26 @@
+mocap_bridge:
+  ros__parameters: #diz ao ros2 que o que esta asseguir sao configurações para o mocap_bridge
+  
+    #  Nome do rigid body (deve coincidir com o QTM e crazyflies.yaml)
+    robot_name: "cf231"
+ 
+    # Tópico publicado pelo motion_capture_tracking, Onde são publicadas as posições vindas do MoCap
+    poses_topic: "/poses"
+ 
+    # Tópico de saída (deixar vazio para usar /<robot_name>/pose automaticamente), topico de comunicacao com o drone
+    output_topic: ""
+ 
+    # Sistema de coordenadas de referência. 
+    #"world" significa que a posição é relativa a um ponto fixo no mundo real, neste caso é o centro da arena. Assim é posivel saber a posição exata do drone
+    #"map" é parecido com o world porem pode ter pequenas correções ao longo do tempo enquanto que o world é sempre fixo
+    #"odom" Referencial do odómetro, as coordendas são relativas à posição onde o robot arrancou. Este tipo de refenrencial acumula erros ao longo do tempo
+    #"base_link" Referencial do próprio robot, é usado para descrever coisas relativas ao drone
+    #"camera_frame" Referencial de uma camara especifica. As coordenadas são relativas à posição da camara
+    frame_id: "world"
+ 
+    # Índice da posição no PoseArray (0 = primeiro drone)
+    # Caso usar outros drones, incremento este valor para cada um de modo a rastrear varios drones ao msm tempo
+    pose_index: 0
+ 
+    # Limite máximo de posição em metros (Limite de Segurança), se o sistema disser que o drone está a mais de max_position metros de distancia, essa posição é ignorada por ser inválida
+    max_position: 10.0
