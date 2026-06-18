@@ -15,8 +15,6 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped
 from crazyflie_interfaces.srv import Takeoff, Land, GoTo, Arm, UpdateParams
-from crazyflie_interfaces.msg import VelocityWorld
-from std_msgs.msg import Header
 
 from mocap_bridge.flight_handler import FlightHandler
 
@@ -29,14 +27,12 @@ class DroneControllerNode(Node):
         # Lê os parâmetros do ficheiro params_controller.yaml
         self.declare_parameter('robot_name',        'cf231')
         self.declare_parameter('target_height',      1.0)
-        self.declare_parameter('takeoff_duration',   2.5)
+        self.declare_parameter('takeoff_duration',   4.0)
         self.declare_parameter('hover_duration',     3.0)
-        self.declare_parameter('land_duration',      2.5)
-        self.declare_parameter('mode',              'position')
+        self.declare_parameter('land_duration',      3.0)
         self.declare_parameter('trajectory',        'square')
         self.declare_parameter('side_length',        1.0)
-        self.declare_parameter('velocity',           0.5)
-        self.declare_parameter('waypoint_duration',  3.0)
+        self.declare_parameter('waypoint_duration',  4.0)
         self.declare_parameter('circle_points',      16)
 
         robot_name             = self.get_parameter('robot_name').get_parameter_value().string_value
@@ -44,20 +40,23 @@ class DroneControllerNode(Node):
         self.takeoff_duration  = self.get_parameter('takeoff_duration').get_parameter_value().double_value
         self.hover_duration    = self.get_parameter('hover_duration').get_parameter_value().double_value
         self.land_duration     = self.get_parameter('land_duration').get_parameter_value().double_value
-        self.mode              = self.get_parameter('mode').get_parameter_value().string_value
         trajectory             = self.get_parameter('trajectory').get_parameter_value().string_value
         side_length            = self.get_parameter('side_length').get_parameter_value().double_value
-        velocity               = self.get_parameter('velocity').get_parameter_value().double_value
         self.waypoint_duration = self.get_parameter('waypoint_duration').get_parameter_value().double_value
         circle_points          = self.get_parameter('circle_points').get_parameter_value().integer_value
 
         # Flags de controlo da missão
-        self.mission_complete = False  # impede que a missão se repita após aterrar
-        self.waypoint_sent    = False  # garante que o go_to só é enviado uma vez por waypoint
-        self.rotation_done    = False  # controla a rotação antes de avançar (só no quadrado)
+        self.mission_complete = False
+        self.waypoint_sent    = False
+        self.rotation_done    = False
 
         # O flight_handler gere a lógica de voo independentemente do ROS
-        self.handler = FlightHandler(target_height=target_height, side_length=side_length, mode=self.mode, velocity=velocity, trajectory=trajectory, circle_points=circle_points)
+        self.handler = FlightHandler(
+            target_height=target_height,
+            side_length=side_length,
+            trajectory=trajectory,
+            circle_points=circle_points,
+        )
 
         # Subscrição à pose do drone publicada pelo mocap_bridge
         self.sub_pose = self.create_subscription(
@@ -74,66 +73,44 @@ class DroneControllerNode(Node):
         self.cli_goto          = self.create_client(GoTo,         f'/{robot_name}/go_to')
         self.cli_update_params = self.create_client(UpdateParams, f'/{robot_name}/update_params')
 
-        # Publisher de velocidades para o modo velocity
-        self.pub_vel = self.create_publisher(
-            VelocityWorld,
-            f'/{robot_name}/cmd_vel_legacy',
-            10
-        )
-
         # Timer principal — verifica o estado do drone a cada 0.1 segundos
         self.timer = self.create_timer(0.1, self.timer_callback)
 
         self.get_logger().info(
             f'DroneControllerNode iniciado:\n'
             f'  robot_name      : {robot_name}\n'
-            f'  mode            : {self.mode}\n'
             f'  trajectory      : {trajectory}\n'
             f'  target_height   : {target_height} m\n'
             f'  side_length     : {side_length} m\n'
-            f'  velocity        : {velocity} m/s\n'
             f'  takeoff_duration: {self.takeoff_duration} s\n'
             f'  hover_duration  : {self.hover_duration} s\n'
             f'  land_duration   : {self.land_duration} s'
         )
 
     def pose_callback(self, msg: PoseStamped):
-        # Passa a pose actual ao flight_handler para que ele saiba onde o drone está
+        # Passa a pose actual ao flight_handler
         self.handler.update_pose(msg.pose)
-        self.get_logger().debug(
-            f'[drone_controller] x={msg.pose.position.x:.3f} '
-            f'y={msg.pose.position.y:.3f} '
-            f'z={msg.pose.position.z:.3f} '
-            f'estado={self.handler.get_state()}'
-        )
 
     def timer_callback(self):
-        # Se a missão já terminou não faz nada
         if self.mission_complete:
             return
 
         state = self.handler.get_state()
 
         if state == FlightHandler.LANDED:
-            # Só inicia o voo quando o MoCap já está a fornecer a pose
             if self.handler.is_ready_to_fly():
                 self.do_takeoff()
 
         elif state == FlightHandler.FLYING:
             if self.handler.trajectory == FlightHandler.TRAJECTORY_HOVER:
                 return
-            elif self.mode == FlightHandler.MODE_POSITION:
-                self.fly_position()
-            else:
-                self.fly_velocity()
+            self.fly_position()
 
     def reset_estimator(self):
-        # Reinicia o filtro de Kalman do drone para garantir que a estimativa
-        # de posição converge para os dados do MoCap antes do takeoff
+        # Reinicia o filtro de Kalman para garantir que converge para o MoCap
         if not self.cli_update_params.wait_for_service(timeout_sec=1.0):
             self.get_logger().warn('[drone_controller] update_params não disponível.')
             return
-
         req = UpdateParams.Request()
         req.params = ['kalman.resetEstimation']
         self.cli_update_params.call_async(req)
@@ -145,7 +122,6 @@ class DroneControllerNode(Node):
         if not self.cli_arm.wait_for_service(timeout_sec=1.0):
             self.get_logger().warn('[drone_controller] Serviço arm não disponível.')
             return
-
         req = Arm.Request()
         req.arm = True
         self.cli_arm.call_async(req)
@@ -156,7 +132,6 @@ class DroneControllerNode(Node):
             self.get_logger().warn('[drone_controller] Serviço takeoff não disponível.')
             return
 
-        # Reinicia o Kalman e arma os motores antes de subir
         self.reset_estimator()
         self.do_arm()
         time.sleep(1.0)
@@ -176,12 +151,10 @@ class DroneControllerNode(Node):
     def takeoff_done_callback(self, future):
         self.get_logger().info('[drone_controller] Takeoff concluído — a pairar.')
         self.handler.set_state(FlightHandler.HOVER)
-        # Aguarda hover_duration segundos antes de iniciar a trajectória
         self._start_traj_timer = self.create_timer(self.hover_duration, self.start_trajectory)
 
     def start_trajectory(self):
         self._start_traj_timer.cancel()
-
         self.handler.set_state(FlightHandler.FLYING)
         self.handler.reset_trajectory()
         self.waypoint_sent = False
@@ -189,8 +162,6 @@ class DroneControllerNode(Node):
         self.get_logger().info(
             f'[drone_controller] Trajectória iniciada: {self.handler.trajectory}'
         )
-
-        # No hover agenda o land após hover_duration segundos
         if self.handler.trajectory == FlightHandler.TRAJECTORY_HOVER:
             self._land_timer = self.create_timer(self.hover_duration, self.do_land)
 
@@ -227,7 +198,7 @@ class DroneControllerNode(Node):
                 self.do_land()
                 return
 
-        # Só envia o go_to uma vez por waypoint para evitar comandos repetidos
+        # Só envia o go_to uma vez por waypoint
         if self.waypoint_sent:
             return
 
@@ -278,7 +249,7 @@ class DroneControllerNode(Node):
             )
 
     def _advance_to_waypoint(self):
-        # Chamado após a rotação no quadrado — envia o go_to para a posição destino
+        # Chamado após a rotação no quadrado
         self._rotation_timer.cancel()
 
         waypoint = self.handler.get_next_waypoint()
@@ -303,29 +274,6 @@ class DroneControllerNode(Node):
             f'[drone_controller] A avançar x={x:.2f} y={y:.2f} z={z:.2f} '
             f'yaw={math.degrees(yaw):.1f}°'
         )
-
-    def fly_velocity(self):
-        if self.handler.is_trajectory_complete():
-            self.do_land()
-            return
-
-        if self.handler.reached_waypoint():
-            self.handler.advance_waypoint()
-            if self.handler.is_trajectory_complete():
-                self.do_land()
-                return
-
-        vx, vy, vz = self.handler.get_velocity_command()
-
-        msg = VelocityWorld()
-        msg.header = Header()
-        msg.header.stamp    = self.get_clock().now().to_msg()
-        msg.header.frame_id = 'world/drone_controller'
-        msg.vel.x    = vx
-        msg.vel.y    = vy
-        msg.vel.z    = vz
-        msg.yaw_rate = 0.0
-        self.pub_vel.publish(msg)
 
     def do_land(self):
         if self.mission_complete:

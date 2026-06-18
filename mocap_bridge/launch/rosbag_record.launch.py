@@ -33,6 +33,7 @@ def generate_launch_description():
                 '-o', LaunchConfiguration('bag_name'),
                 '/poses',
                 '/cf231/pose',
+                '/cf231/status',
             ],
             output='screen'
         )

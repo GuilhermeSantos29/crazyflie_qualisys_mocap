@@ -60,7 +60,7 @@ class MocapBridgeNode(Node):
             reliability=QoSReliabilityPolicy.BEST_EFFORT,
             history=QoSHistoryPolicy.KEEP_LAST,
             depth=10,
-            deadline=Duration(nanoseconds=10000000)
+            deadline=Duration(nanoseconds=10000000)  #50000000
         )
 
         # --- Subscrição ao tópico /<robot_name> do qualisys_ros2 ---
