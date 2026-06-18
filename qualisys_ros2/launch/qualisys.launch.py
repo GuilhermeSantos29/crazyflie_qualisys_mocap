@@ -20,6 +20,7 @@ def generate_launch_description():
             'server_address': '192.168.12.195',
             'server_base_port': 22222,
             'publish_tf': True,
+            'frame_rate': 20,
         }]
     )
 
